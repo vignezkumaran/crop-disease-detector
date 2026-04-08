@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 from threading import Lock
 from typing import Any, Dict, Literal, Optional
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel, Field, ValidationError
 
 from environment import CropAction, CropDiseaseEnvironment, FieldObservation
 
@@ -73,15 +74,30 @@ def health() -> Dict[str, str]:
 
 
 @app.post("/reset", response_model=ResetResponse)
-def reset(payload: ResetRequest) -> ResetResponse:
+async def reset(request: Request) -> ResetResponse:
     global _env, _task, _total_reward
+
+    payload = ResetRequest()
+    raw_body = await request.body()
+    if raw_body:
+        try:
+            body_data = json.loads(raw_body.decode("utf-8"))
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"Invalid JSON body: {exc}") from exc
+
+        try:
+            payload = ResetRequest(**body_data)
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
     with _env_lock:
-        _env = CropDiseaseEnvironment(task=payload.task)
-        _task = payload.task
+        task = payload.task
+        _env = CropDiseaseEnvironment(task=task)
+        _task = task
         _total_reward = 0.0
         observation = _env.reset()
         return ResetResponse(
-            task=payload.task,
+            task=task,
             observation=observation,
             done=_env.is_done,
             step_count=_env.step_count,
