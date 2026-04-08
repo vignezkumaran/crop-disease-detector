@@ -1,12 +1,29 @@
 ---
-title: Crop Disease Detector
-emoji: 📉
+title: Crop Disease Detector API
+emoji: 🌾
 colorFrom: green
-colorTo: gray
+colorTo: blue
 sdk: docker
+app_port: 7860
 pinned: false
 license: mit
-short_description: OpenEnv crop disease detection AI environment
+short_description: FastAPI environment for crop disease detection and treatment decisions
 ---
 
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+# Crop Disease Detector API
+
+This Docker Space serves a FastAPI backend for the crop disease environment.
+
+## Endpoints
+
+- GET /health
+- POST /reset
+- POST /step
+- GET /state
+- GET /score
+
+## Quick Test
+
+1. GET /health should return {"status":"ok"}
+2. POST /reset with {"task":"easy"}
+3. POST /step with an action payload

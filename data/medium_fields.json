@@ -1,0 +1,50 @@
+[
+  {
+    "field_id": "M001",
+    "crop_type": "Potato",
+    "diseases": [
+      {
+        "name": "Late Blight",
+        "severity": "severe",
+        "affected_area": 42.0,
+        "spread_risk": "high"
+      },
+      {
+        "name": "Blackleg",
+        "severity": "moderate",
+        "affected_area": 15.0,
+        "spread_risk": "medium"
+      }
+    ],
+    "temperature": 18.5,
+    "moisture": 90.0,
+    "growth_stage": "tuber_formation",
+    "nearby_fields": [
+      "M002"
+    ],
+    "days_since_detection": 4
+  },
+  {
+    "field_id": "M002",
+    "crop_type": "Corn",
+    "diseases": [
+      {
+        "name": "Northern Corn Leaf Blight",
+        "severity": "moderate",
+        "affected_area": 22.0,
+        "spread_risk": "medium"
+      },
+      {
+        "name": "Gray Leaf Spot",
+        "severity": "mild",
+        "affected_area": 10.0,
+        "spread_risk": "low"
+      }
+    ],
+    "temperature": 26.0,
+    "moisture": 65.0,
+    "growth_stage": "tasseling",
+    "nearby_fields": [],
+    "days_since_detection": 2
+  }
+]

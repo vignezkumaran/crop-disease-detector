@@ -1,0 +1,80 @@
+[
+  {
+    "field_id": "H001",
+    "crop_type": "Tomato",
+    "diseases": [
+      {
+        "name": "Late Blight",
+        "severity": "critical",
+        "affected_area": 70.0,
+        "spread_risk": "high"
+      },
+      {
+        "name": "Early Blight",
+        "severity": "severe",
+        "affected_area": 30.0,
+        "spread_risk": "high"
+      },
+      {
+        "name": "Fusarium Wilt",
+        "severity": "moderate",
+        "affected_area": 20.0,
+        "spread_risk": "medium"
+      }
+    ],
+    "temperature": 22.0,
+    "moisture": 88.0,
+    "growth_stage": "fruiting",
+    "nearby_fields": [
+      "H002",
+      "H003"
+    ],
+    "days_since_detection": 2
+  },
+  {
+    "field_id": "H002",
+    "crop_type": "Tomato",
+    "diseases": [
+      {
+        "name": "Late Blight",
+        "severity": "severe",
+        "affected_area": 45.0,
+        "spread_risk": "high"
+      },
+      {
+        "name": "Septoria Leaf Spot",
+        "severity": "moderate",
+        "affected_area": 18.0,
+        "spread_risk": "medium"
+      }
+    ],
+    "temperature": 22.5,
+    "moisture": 86.0,
+    "growth_stage": "fruiting",
+    "nearby_fields": [
+      "H001",
+      "H003"
+    ],
+    "days_since_detection": 1
+  },
+  {
+    "field_id": "H003",
+    "crop_type": "Tomato",
+    "diseases": [
+      {
+        "name": "Late Blight",
+        "severity": "mild",
+        "affected_area": 5.0,
+        "spread_risk": "high"
+      }
+    ],
+    "temperature": 22.0,
+    "moisture": 85.0,
+    "growth_stage": "fruiting",
+    "nearby_fields": [
+      "H001",
+      "H002"
+    ],
+    "days_since_detection": 0
+  }
+]

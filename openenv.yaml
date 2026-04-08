@@ -1,0 +1,114 @@
+env_id: crop_disease_detector
+name: Crop Disease Detector
+version: "1.0.0"
+description: >
+  AI agent environment for detecting crop diseases from field sensor data
+  and recommending treatment actions to minimise crop loss.
+
+observation_space:
+  type: object
+  description: Real-time field observation including disease status and environmental conditions
+  properties:
+    field_id:
+      type: string
+      description: Unique field identifier
+    crop_type:
+      type: string
+      description: Type of crop grown in the field
+    diseases:
+      type: array
+      description: List of detected diseases in the field
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          severity:
+            type: string
+            enum: [none, mild, moderate, severe, critical]
+          affected_area:
+            type: number
+            minimum: 0.0
+            maximum: 100.0
+            description: Percentage of field area affected
+          spread_risk:
+            type: string
+            enum: [low, medium, high]
+    temperature:
+      type: number
+      description: Current field temperature in Celsius
+    moisture:
+      type: number
+      minimum: 0.0
+      maximum: 100.0
+      description: Soil moisture percentage
+    growth_stage:
+      type: string
+      description: Current crop growth stage
+    nearby_fields:
+      type: array
+      items:
+        type: string
+      description: IDs of adjacent fields (for outbreak assessment)
+    days_since_detection:
+      type: integer
+      minimum: 0
+      description: Days elapsed since disease was first detected
+
+action_space:
+  type: object
+  description: Treatment decision for the current field
+  properties:
+    action:
+      type: string
+      enum: [treat, remove, monitor, do_nothing]
+      description: |
+        treat      - Apply fungicide/pesticide for severe disease
+        remove     - Remove infected plants to stop critical spread
+        monitor    - Observe and re-assess for mild/moderate disease
+        do_nothing - No intervention needed for healthy fields
+    target_disease:
+      type: string
+      nullable: true
+      description: Name of the primary disease being addressed
+    confidence:
+      type: number
+      minimum: 0.0
+      maximum: 1.0
+      description: Agent confidence in its decision
+    reasoning:
+      type: string
+      nullable: true
+      description: Brief justification for the chosen action
+
+tasks:
+  - name: easy
+    description: Three single-disease fields — straightforward detection and treatment
+    data_file: data/easy_fields.json
+    grader: tasks.grade_easy
+    max_steps: 3
+
+  - name: medium
+    description: Two multi-disease fields with severity-weighted scoring
+    data_file: data/medium_fields.json
+    grader: tasks.grade_medium
+    max_steps: 2
+
+  - name: hard
+    description: Outbreak scenario — three connected tomato fields with cascading infection
+    data_file: data/hard_fields.json
+    grader: tasks.grade_hard
+    max_steps: 3
+
+rewards:
+  remove_critical:    +0.5
+  treat_severe:       +0.4
+  monitor_mild:       +0.3
+  do_nothing_healthy: +0.2
+  ignore_critical:    -0.8
+  ignore_severe:      -0.5
+  overreact_remove:   -0.3
+  wrong_action:       -0.2
+
+entry_point: environment:CropDiseaseEnvironment
+inference_script: inference.py

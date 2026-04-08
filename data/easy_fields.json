@@ -1,0 +1,55 @@
+[
+  {
+    "field_id": "E001",
+    "crop_type": "Tomato",
+    "diseases": [
+      {
+        "name": "Early Blight",
+        "severity": "severe",
+        "affected_area": 35.0,
+        "spread_risk": "high"
+      }
+    ],
+    "temperature": 24.5,
+    "moisture": 78.0,
+    "growth_stage": "flowering",
+    "nearby_fields": [],
+    "days_since_detection": 3
+  },
+  {
+    "field_id": "E002",
+    "crop_type": "Wheat",
+    "diseases": [
+      {
+        "name": "Wheat Rust",
+        "severity": "mild",
+        "affected_area": 8.0,
+        "spread_risk": "low"
+      }
+    ],
+    "temperature": 19.0,
+    "moisture": 55.0,
+    "growth_stage": "grain_fill",
+    "nearby_fields": [],
+    "days_since_detection": 1
+  },
+  {
+    "field_id": "E003",
+    "crop_type": "Potato",
+    "diseases": [
+      {
+        "name": "Blackleg",
+        "severity": "critical",
+        "affected_area": 60.0,
+        "spread_risk": "high"
+      }
+    ],
+    "temperature": 16.0,
+    "moisture": 85.0,
+    "growth_stage": "tuber_formation",
+    "nearby_fields": [
+      "E004"
+    ],
+    "days_since_detection": 5
+  }
+]
