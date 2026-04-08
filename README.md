@@ -7,7 +7,7 @@ sdk: docker
 app_port: 7860
 pinned: false
 license: mit
-short_description: FastAPI environment for crop disease detection and treatment decisions
+short_description: FastAPI crop disease decision environment
 ---
 
 # Crop Disease Detector API
