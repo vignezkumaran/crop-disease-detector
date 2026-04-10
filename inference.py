@@ -23,7 +23,7 @@ MAX_STEPS = int(os.getenv("MAX_STEPS", "10"))
 
 
 def _log(tag: str, payload: Dict[str, Any]) -> None:
-    print(f"{tag} {json.dumps(payload, ensure_ascii=True)}", flush=True)
+    print(f"[{tag}] {json.dumps(payload, ensure_ascii=True)}", flush=True)
 
 
 def _normalize_observation(step_result: Any) -> Any:
@@ -81,6 +81,44 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
+def _fallback_action(observation: Any) -> Dict[str, Any]:
+    severity_rank = {
+        "none": 0,
+        "mild": 1,
+        "moderate": 2,
+        "severe": 3,
+        "critical": 4,
+    }
+    obs_json = _to_jsonable(observation)
+    diseases = obs_json.get("diseases", []) if isinstance(obs_json, dict) else []
+
+    if not diseases:
+        return {
+            "action": "do_nothing",
+            "target_disease": None,
+            "confidence": 0.75,
+            "reasoning": "No detected disease in observation",
+        }
+
+    top = max(diseases, key=lambda d: severity_rank.get(str(d.get("severity", "none")), 0))
+    top_sev = str(top.get("severity", "none"))
+    target = top.get("name")
+
+    if severity_rank.get(top_sev, 0) >= severity_rank["critical"]:
+        action = "remove"
+    elif severity_rank.get(top_sev, 0) >= severity_rank["severe"]:
+        action = "treat"
+    else:
+        action = "monitor"
+
+    return {
+        "action": action,
+        "target_disease": target,
+        "confidence": 0.65,
+        "reasoning": "Fallback heuristic selected from max disease severity",
+    }
+
+
 def choose_action(client: OpenAI, observation: Any) -> Dict[str, Any]:
     obs_json = _to_jsonable(observation)
 
@@ -91,18 +129,21 @@ def choose_action(client: OpenAI, observation: Any) -> Dict[str, Any]:
         "confidence must be in [0,1]."
     )
 
-    resp = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": json.dumps(obs_json)},
-        ],
-        temperature=0.1,
-        response_format={"type": "json_object"},
-    )
+    try:
+        resp = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": json.dumps(obs_json)},
+            ],
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
 
-    text = resp.choices[0].message.content or "{}"
-    action = json.loads(text)
+        text = resp.choices[0].message.content or "{}"
+        action = json.loads(text)
+    except Exception:
+        return _fallback_action(observation)
 
     # Keep action payload schema-safe.
     action_name = action.get("action", "monitor")
@@ -213,4 +254,16 @@ async def run_episode() -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    asyncio.run(run_episode())
+    try:
+        asyncio.run(run_episode())
+    except Exception as exc:
+        _log(
+            "END",
+            {
+                "steps": 0,
+                "total_reward": 0.0,
+                "done": False,
+                "reason": "runtime_error",
+                "error": str(exc),
+            },
+        )

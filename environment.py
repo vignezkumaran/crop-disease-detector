@@ -76,9 +76,11 @@ class CropDiseaseEnvironment:
 
     ENV_ID = "crop_disease_detector"
 
-    def __init__(self, task: str = "easy") -> None:
+    def __init__(self, task: str = "easy", seed: Optional[int] = None) -> None:
         self.task = task
+        self.seed = seed
         self._data_dir = Path(__file__).parent / "data"
+        self._rng = random.Random(seed)
         self._fields: List[Dict[str, Any]] = []
         self._current_index: int = 0
         self._current_obs: Optional[FieldObservation] = None
@@ -91,10 +93,14 @@ class CropDiseaseEnvironment:
     # Core API
     # ------------------------------------------------------------------
 
-    def reset(self) -> FieldObservation:
+    def reset(self, seed: Optional[int] = None) -> FieldObservation:
         """Load task fields, shuffle them, and return the first observation."""
+        if seed is not None:
+            self.seed = seed
+            self._rng = random.Random(seed)
+
         self._fields = self._load_fields()
-        random.shuffle(self._fields)
+        self._rng.shuffle(self._fields)
         self._current_index = 0
         self._step_count = 0
         self._done = False
