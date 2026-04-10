@@ -1,3 +1,5 @@
+import asyncio
+import inspect
 import json
 import os
 from typing import Any, Dict, Optional
@@ -73,6 +75,12 @@ def _to_jsonable(value: Any) -> Any:
     return str(value)
 
 
+async def _maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
 def choose_action(client: OpenAI, observation: Any) -> Dict[str, Any]:
     obs_json = _to_jsonable(observation)
 
@@ -116,17 +124,18 @@ def choose_action(client: OpenAI, observation: Any) -> Dict[str, Any]:
     }
 
 
-def run_episode() -> Dict[str, Any]:
+async def run_episode() -> Dict[str, Any]:
+    env = None
     if LOCAL_IMAGE_NAME:
-        env = GenericEnvClient.from_docker_image(LOCAL_IMAGE_NAME)
+        env = await _maybe_await(GenericEnvClient.from_docker_image(LOCAL_IMAGE_NAME))
         env_source = {"mode": "docker_image", "image": LOCAL_IMAGE_NAME}
     else:
-        env = GenericEnvClient.from_env(ENV_REPO_ID)
+        env = await _maybe_await(GenericEnvClient.from_env(ENV_REPO_ID))
         env_source = {"mode": "hub_env", "repo_id": ENV_REPO_ID}
 
     client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
-    env.connect()
+    await _maybe_await(env.connect())
     total_reward = 0.0
     step_count = 0
     try:
@@ -140,12 +149,12 @@ def run_episode() -> Dict[str, Any]:
             },
         )
 
-        reset_result = env.reset(task=TASK)
+        reset_result = await _maybe_await(env.reset(task=TASK))
         observation = _normalize_observation(reset_result)
 
         while step_count < MAX_STEPS:
             action = choose_action(client, observation)
-            step_result = env.step(action)
+            step_result = await _maybe_await(env.step(action))
 
             step_count += 1
             reward = _reward(step_result)
@@ -198,9 +207,10 @@ def run_episode() -> Dict[str, Any]:
             "reason": "max_steps_reached",
         }
     finally:
-        env.disconnect()
-        env.close()
+        if env is not None:
+            await _maybe_await(env.disconnect())
+            await _maybe_await(env.close())
 
 
 if __name__ == "__main__":
-    run_episode()
+    asyncio.run(run_episode())
