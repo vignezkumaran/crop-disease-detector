@@ -29,10 +29,19 @@ ENV_REPO_ID = os.getenv("ENV_REPO_ID", "vignezkumaran/crop-disease-detector")
 TASK = os.getenv("TASK", "easy")
 MAX_STEPS = int(os.getenv("MAX_STEPS", "10"))
 LLM_RETRIES = int(os.getenv("LLM_RETRIES", "3"))
+EPS = 1e-6
 
 
 def _num(value: float) -> str:
     return f"{value:.4f}"
+
+
+def _strict_score(value: float) -> float:
+    if value <= 0.0:
+        return EPS
+    if value >= 1.0:
+        return 1.0 - EPS
+    return value
 
 
 def _log_start(task: str) -> None:
@@ -44,7 +53,7 @@ def _log_step(step: int, reward: float) -> None:
 
 
 def _log_end(task: str, score: float, steps: int) -> None:
-    print(f"[END] task={task} score={_num(score)} steps={steps}", flush=True)
+    print(f"[END] task={task} score={_num(_strict_score(score))} steps={steps}", flush=True)
 
 
 def _to_jsonable(value: Any) -> Any:
