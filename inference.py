@@ -10,6 +10,9 @@ from openenv import GenericEnvClient
 # Defaults are intentionally set only for API_BASE_URL and MODEL_NAME.
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api-inference.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+# Evaluator injects API_KEY for LiteLLM proxy routing.
+API_KEY = os.getenv("API_KEY")
+# Backward compatibility for local runs.
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 # Optional - use this to run against a local Docker image.
@@ -191,7 +194,11 @@ async def run_episode() -> Dict[str, Any]:
         env = await _maybe_await(GenericEnvClient.from_env(ENV_REPO_ID))
         env_source = {"mode": "hub_env", "repo_id": ENV_REPO_ID}
 
-    client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+    api_key = API_KEY or HF_TOKEN
+    if not api_key:
+        raise RuntimeError("Missing API credential: set API_KEY (preferred) or HF_TOKEN.")
+
+    client = OpenAI(base_url=API_BASE_URL, api_key=api_key)
 
     await _maybe_await(env.connect())
     total_reward = 0.0
