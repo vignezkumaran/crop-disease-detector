@@ -1,10 +1,17 @@
 import asyncio
 import inspect
 import os
+import sys
 from typing import Any, Dict, Optional
 
 from openai import OpenAI
 from openenv import GenericEnvClient
+
+
+# Ensure helper executables installed in the active Python env (e.g. uv)
+# are discoverable even when this script is launched via absolute python path.
+_PY_BIN_DIR = os.path.dirname(sys.executable)
+os.environ["PATH"] = _PY_BIN_DIR + os.pathsep + os.environ.get("PATH", "")
 
 
 # Defaults are intentionally set only for API_BASE_URL and MODEL_NAME.
@@ -23,6 +30,7 @@ LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 ENV_REPO_ID = os.getenv("ENV_REPO_ID", "vignezkumaran/crop-disease-detector")
 TASK = os.getenv("TASK", "easy")
 MAX_STEPS = int(os.getenv("MAX_STEPS", "10"))
+LLM_RETRIES = int(os.getenv("LLM_RETRIES", "3"))
 
 
 def _num(value: float) -> str:
@@ -144,25 +152,30 @@ def choose_action(client: OpenAI, observation: Any) -> tuple[Dict[str, Any], boo
         "confidence must be in [0,1]."
     )
 
-    try:
-        resp = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": str(obs_json)},
-            ],
-            temperature=0.1,
-            response_format={"type": "json_object"},
-        )
+    last_exc: Optional[Exception] = None
+    for _ in range(max(1, LLM_RETRIES)):
+        try:
+            resp = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": str(obs_json)},
+                ],
+                temperature=0.1,
+                response_format={"type": "json_object"},
+            )
 
-        text = resp.choices[0].message.content or "{}"
-        # Keep parser dependencies minimal in case validator runtime differs.
-        import json
+            text = resp.choices[0].message.content or "{}"
+            # Keep parser dependencies minimal in case validator runtime differs.
+            import json
 
-        action = json.loads(text)
-    except Exception:
+            action = json.loads(text)
+            break
+        except Exception as exc:
+            last_exc = exc
+    else:
         if STRICT_PROXY_MODE:
-            raise
+            raise RuntimeError(f"LLM proxy call failed after retries: {last_exc}")
         return _fallback_action(observation), False
 
     # Keep action payload schema-safe.
@@ -259,5 +272,6 @@ if __name__ == "__main__":
         asyncio.run(run_episode())
     except Exception as exc:
         # If anything fails early, still emit parseable END block.
+        _log_step(0, 0.0)
         _log_end(TASK, 0.0, 0)
         raise SystemExit(str(exc))
