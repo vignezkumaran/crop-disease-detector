@@ -29,7 +29,7 @@ ENV_REPO_ID = os.getenv("ENV_REPO_ID", "vignezkumaran/crop-disease-detector")
 TASK = os.getenv("TASK", "easy")
 MAX_STEPS = int(os.getenv("MAX_STEPS", "10"))
 LLM_RETRIES = int(os.getenv("LLM_RETRIES", "3"))
-EPS = 1e-6
+EPS = 1e-4
 
 
 def _num(value: float) -> str:
