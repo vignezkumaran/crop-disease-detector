@@ -55,6 +55,12 @@ OPTIMAL_REWARDS: Dict[str, float] = {
     "do_nothing": 0.2,  # Correct inaction when healthy
 }
 
+DEFAULT_TASK_SEEDS: Dict[str, int] = {
+    "easy": 101,
+    "medium": 202,
+    "hard": 303,
+}
+
 
 # ---------------------------------------------------------------------------
 # Environment
@@ -78,9 +84,9 @@ class CropDiseaseEnvironment:
 
     def __init__(self, task: str = "easy", seed: Optional[int] = None) -> None:
         self.task = task
-        self.seed = seed
+        self.seed = seed if seed is not None else DEFAULT_TASK_SEEDS.get(task, 101)
         self._data_dir = Path(__file__).parent / "data"
-        self._rng = random.Random(seed)
+        self._rng = random.Random(self.seed)
         self._fields: List[Dict[str, Any]] = []
         self._current_index: int = 0
         self._current_obs: Optional[FieldObservation] = None
@@ -97,7 +103,10 @@ class CropDiseaseEnvironment:
         """Load task fields, shuffle them, and return the first observation."""
         if seed is not None:
             self.seed = seed
-            self._rng = random.Random(seed)
+            self._rng = random.Random(self.seed)
+        elif self.seed is None:
+            self.seed = DEFAULT_TASK_SEEDS.get(self.task, 101)
+            self._rng = random.Random(self.seed)
 
         self._fields = self._load_fields()
         self._rng.shuffle(self._fields)

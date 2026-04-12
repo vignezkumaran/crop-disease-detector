@@ -23,6 +23,25 @@ def _load_fields(task: str) -> List[Dict[str, Any]]:
         return json.load(f)
 
 
+def _build_field_index(fields: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    return {str(f.get("field_id")): f for f in fields if f.get("field_id") is not None}
+
+
+def _resolve_observation(
+    fields: List[Dict[str, Any]],
+    field_index: Dict[str, Dict[str, Any]],
+    step: Dict[str, Any],
+    idx: int,
+) -> Dict[str, Any]:
+    observed = step.get("observation", {})
+    field_id = observed.get("field_id") if isinstance(observed, dict) else None
+    if field_id is not None and str(field_id) in field_index:
+        return field_index[str(field_id)]
+    if idx < len(fields):
+        return fields[idx]
+    return {}
+
+
 def _get_optimal_action(obs: Dict[str, Any]) -> str:
     diseases = obs.get("diseases", [])
     if not diseases:
@@ -57,29 +76,35 @@ def grade_easy(history: List[Dict[str, Any]]) -> float:
     if not history:
         return 0.0
     fields = _load_fields("easy")
+    field_index = _build_field_index(fields)
     correct = 0
+    considered = 0
     for i, step in enumerate(history):
-        if i >= len(fields):
-            break
-        obs = fields[i]
+        obs = _resolve_observation(fields, field_index, step, i)
+        if not obs:
+            continue
+        considered += 1
         action = step.get("action", {})
         action_type = action.get("action", "do_nothing")
         optimal = _get_optimal_action(obs)
         if action_type == optimal:
             correct += 1
-    return correct / len(history)
+    if considered == 0:
+        return 0.0
+    return correct / considered
 
 
 def grade_medium(history: List[Dict[str, Any]]) -> float:
     if not history:
         return 0.0
     fields = _load_fields("medium")
+    field_index = _build_field_index(fields)
     total_reward = 0.0
     max_possible = 0.0
     for i, step in enumerate(history):
-        if i >= len(fields):
-            break
-        obs = fields[i]
+        obs = _resolve_observation(fields, field_index, step, i)
+        if not obs:
+            continue
         action = step.get("action", {})
         action_type = action.get("action", "do_nothing")
         reward = _calculate_reward(action_type, obs)
@@ -96,12 +121,13 @@ def grade_hard(history: List[Dict[str, Any]]) -> float:
     if not history:
         return 0.0
     fields = _load_fields("hard")
+    field_index = _build_field_index(fields)
     total_reward = 0.0
     max_possible = 0.0
     for i, step in enumerate(history):
-        if i >= len(fields):
-            break
-        obs = fields[i]
+        obs = _resolve_observation(fields, field_index, step, i)
+        if not obs:
+            continue
         action = step.get("action", {})
         action_type = action.get("action", "do_nothing")
         reward = _calculate_reward(action_type, obs)
