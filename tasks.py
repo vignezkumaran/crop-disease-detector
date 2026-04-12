@@ -15,6 +15,17 @@ SEVERITY_ORDER = {
     "critical": 4,
 }
 
+EPS = 1e-6
+
+
+def _strict_unit_interval(value: float) -> float:
+    """Clamp score to the open interval (0, 1) required by validator."""
+    if value <= 0.0:
+        return EPS
+    if value >= 1.0:
+        return 1.0 - EPS
+    return value
+
 
 def _load_fields(task: str) -> List[Dict[str, Any]]:
     data_dir = Path(__file__).parent / "data"
@@ -74,7 +85,7 @@ def _calculate_reward(action: str, obs: Dict[str, Any]) -> float:
 
 def grade_easy(history: List[Dict[str, Any]]) -> float:
     if not history:
-        return 0.0
+        return _strict_unit_interval(0.0)
     fields = _load_fields("easy")
     field_index = _build_field_index(fields)
     correct = 0
@@ -90,13 +101,13 @@ def grade_easy(history: List[Dict[str, Any]]) -> float:
         if action_type == optimal:
             correct += 1
     if considered == 0:
-        return 0.0
-    return correct / considered
+        return _strict_unit_interval(0.0)
+    return _strict_unit_interval(correct / considered)
 
 
 def grade_medium(history: List[Dict[str, Any]]) -> float:
     if not history:
-        return 0.0
+        return _strict_unit_interval(0.0)
     fields = _load_fields("medium")
     field_index = _build_field_index(fields)
     total_reward = 0.0
@@ -112,14 +123,14 @@ def grade_medium(history: List[Dict[str, Any]]) -> float:
         optimal = _get_optimal_action(obs)
         max_possible += _calculate_reward(optimal, obs)
     if max_possible == 0:
-        return 0.0
+        return _strict_unit_interval(0.0)
     normalized = (total_reward + abs(min(0, total_reward))) / (max_possible + abs(min(0, max_possible)))
-    return max(0.0, min(1.0, normalized))
+    return _strict_unit_interval(max(0.0, min(1.0, normalized)))
 
 
 def grade_hard(history: List[Dict[str, Any]]) -> float:
     if not history:
-        return 0.0
+        return _strict_unit_interval(0.0)
     fields = _load_fields("hard")
     field_index = _build_field_index(fields)
     total_reward = 0.0
@@ -148,9 +159,9 @@ def grade_hard(history: List[Dict[str, Any]]) -> float:
         total_reward += speed_bonus
         max_possible += speed_bonus
     if max_possible == 0:
-        return 0.0
+        return _strict_unit_interval(0.0)
     normalized = (total_reward + abs(min(0, total_reward))) / (max_possible + abs(min(0, max_possible)))
-    return max(0.0, min(1.0, normalized))
+    return _strict_unit_interval(max(0.0, min(1.0, normalized)))
 
 
 GRADERS = {"easy": grade_easy, "medium": grade_medium, "hard": grade_hard}
