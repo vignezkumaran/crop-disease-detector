@@ -27,9 +27,11 @@ LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 # Optional env metadata
 ENV_REPO_ID = os.getenv("ENV_REPO_ID", "vignezkumaran/crop-disease-detector")
 TASK = os.getenv("TASK", "easy")
+TASKS = os.getenv("TASKS")
 MAX_STEPS = int(os.getenv("MAX_STEPS", "10"))
 LLM_RETRIES = int(os.getenv("LLM_RETRIES", "3"))
 EPS = 1e-4
+DEFAULT_TASK_LIST = ["easy", "medium", "hard"]
 
 
 def _num(value: float) -> str:
@@ -162,21 +164,11 @@ def choose_action(client: OpenAI, observation: Any) -> tuple[Dict[str, Any], boo
     }, True
 
 
-def run_episode() -> Dict[str, Any]:
-    # Emit START before any network/container operations so parser always sees it.
-    _log_start(TASK)
-
-    api_key = API_KEY or HF_TOKEN
-    if not api_key:
-        # Keep execution alive for parser checks; LLM criteria will fail if key is absent.
-        _log_step(0, 0.0)
-        _log_end(TASK, 0.0, 0)
-        return {"steps": 0, "total_reward": 0.0, "done": False, "reason": "missing_api_key"}
-
-    client = OpenAI(base_url=API_BASE_URL, api_key=api_key)
+def _run_single_task(client: OpenAI, task: str) -> Dict[str, Any]:
+    _log_start(task)
 
     # Run environment in-process to avoid runtime dependency on uv/container providers.
-    env = CropDiseaseEnvironment(task=TASK)
+    env = CropDiseaseEnvironment(task=task)
     total_reward = 0.0
     step_count = 0
     llm_calls = 0
@@ -196,8 +188,9 @@ def run_episode() -> Dict[str, Any]:
             _log_step(step_count, float(reward))
 
             if done:
-                _log_end(TASK, total_reward, step_count)
+                _log_end(task, total_reward, step_count)
                 return {
+                    "task": task,
                     "steps": step_count,
                     "total_reward": total_reward,
                     "done": True,
@@ -209,8 +202,9 @@ def run_episode() -> Dict[str, Any]:
                 break
             observation = next_obs
 
-        _log_end(TASK, total_reward, step_count)
+        _log_end(task, total_reward, step_count)
         return {
+            "task": task,
             "steps": step_count,
             "total_reward": total_reward,
             "done": False,
@@ -220,14 +214,47 @@ def run_episode() -> Dict[str, Any]:
     except Exception:
         # Keep parser visibility even on runtime issues.
         _log_step(max(1, step_count), 0.0)
-        _log_end(TASK, total_reward, max(1, step_count))
+        _log_end(task, total_reward, max(1, step_count))
         return {
+            "task": task,
             "steps": max(1, step_count),
             "total_reward": total_reward,
             "done": False,
             "reason": "runtime_error",
             "llm_calls": llm_calls,
         }
+
+
+def run_episode() -> Dict[str, Any]:
+    # Run all tasks by default so validators can parse 3 task results.
+    if TASKS:
+        task_list = [t.strip() for t in TASKS.split(",") if t.strip()]
+    elif os.getenv("TASK"):
+        task_list = [TASK]
+    else:
+        task_list = DEFAULT_TASK_LIST
+
+    api_key = API_KEY or HF_TOKEN
+    if not api_key:
+        for task in task_list:
+            _log_start(task)
+            _log_step(0, 0.0)
+            _log_end(task, 0.0, 0)
+        return {
+            "tasks": task_list,
+            "done": False,
+            "reason": "missing_api_key",
+        }
+
+    client = OpenAI(base_url=API_BASE_URL, api_key=api_key)
+    results = []
+    for task in task_list:
+        results.append(_run_single_task(client, task))
+
+    return {
+        "tasks": results,
+        "done": True,
+    }
 
 
 if __name__ == "__main__":
