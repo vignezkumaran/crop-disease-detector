@@ -14,6 +14,7 @@ MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 API_KEY = os.getenv("API_KEY")
 # Backward compatibility for local runs.
 HF_TOKEN = os.getenv("HF_TOKEN")
+STRICT_PROXY_MODE = bool(os.getenv("API_BASE_URL") and os.getenv("API_KEY"))
 
 # Optional - use this to run against a local Docker image.
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
@@ -133,7 +134,7 @@ def _fallback_action(observation: Any) -> Dict[str, Any]:
     }
 
 
-def choose_action(client: OpenAI, observation: Any) -> Dict[str, Any]:
+def choose_action(client: OpenAI, observation: Any) -> tuple[Dict[str, Any], bool]:
     obs_json = _to_jsonable(observation)
 
     prompt = (
@@ -160,7 +161,9 @@ def choose_action(client: OpenAI, observation: Any) -> Dict[str, Any]:
 
         action = json.loads(text)
     except Exception:
-        return _fallback_action(observation)
+        if STRICT_PROXY_MODE:
+            raise
+        return _fallback_action(observation), False
 
     # Keep action payload schema-safe.
     action_name = action.get("action", "monitor")
@@ -179,7 +182,7 @@ def choose_action(client: OpenAI, observation: Any) -> Dict[str, Any]:
         "target_disease": action.get("target_disease"),
         "confidence": confidence,
         "reasoning": action.get("reasoning", "model-selected action"),
-    }
+    }, True
 
 
 async def run_episode() -> Dict[str, Any]:
@@ -203,12 +206,15 @@ async def run_episode() -> Dict[str, Any]:
     await _maybe_await(env.connect())
     total_reward = 0.0
     step_count = 0
+    llm_calls = 0
     try:
         reset_result = await _maybe_await(env.reset(task=TASK))
         observation = _normalize_observation(reset_result)
 
         while step_count < MAX_STEPS:
-            action = choose_action(client, observation)
+            action, used_llm = choose_action(client, observation)
+            if used_llm:
+                llm_calls += 1
             step_result = await _maybe_await(env.step(action))
 
             step_count += 1
@@ -221,6 +227,8 @@ async def run_episode() -> Dict[str, Any]:
 
             if done:
                 _log_end(TASK, total_reward, step_count)
+                if STRICT_PROXY_MODE and llm_calls == 0:
+                    raise RuntimeError("No proxy LLM calls were made in strict mode")
                 return {
                     "steps": step_count,
                     "total_reward": total_reward,
@@ -231,6 +239,8 @@ async def run_episode() -> Dict[str, Any]:
             observation = _normalize_observation(step_result)
 
         _log_end(TASK, total_reward, step_count)
+        if STRICT_PROXY_MODE and llm_calls == 0:
+            raise RuntimeError("No proxy LLM calls were made in strict mode")
         return {
             "steps": step_count,
             "total_reward": total_reward,
@@ -249,3 +259,4 @@ if __name__ == "__main__":
     except Exception as exc:
         # If anything fails early, still emit parseable END block.
         _log_end(TASK, 0.0, 0)
+        raise SystemExit(str(exc))
