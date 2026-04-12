@@ -194,8 +194,9 @@ async def run_episode() -> Dict[str, Any]:
         env = await _maybe_await(GenericEnvClient.from_docker_image(LOCAL_IMAGE_NAME))
         env_source = {"mode": "docker_image", "image": LOCAL_IMAGE_NAME}
     else:
-        env = await _maybe_await(GenericEnvClient.from_env(ENV_REPO_ID))
-        env_source = {"mode": "hub_env", "repo_id": ENV_REPO_ID}
+        # Avoid local docker startup timeout in evaluator by default.
+        env = await _maybe_await(GenericEnvClient.from_env(ENV_REPO_ID, use_docker=False))
+        env_source = {"mode": "hub_env", "repo_id": ENV_REPO_ID, "use_docker": False}
 
     api_key = API_KEY or HF_TOKEN
     if not api_key:
