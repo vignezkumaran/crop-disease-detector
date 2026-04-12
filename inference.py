@@ -1,6 +1,5 @@
 import asyncio
 import inspect
-import json
 import os
 from typing import Any, Dict, Optional
 
@@ -22,8 +21,16 @@ TASK = os.getenv("TASK", "easy")
 MAX_STEPS = int(os.getenv("MAX_STEPS", "10"))
 
 
-def _log(tag: str, payload: Dict[str, Any]) -> None:
-    print(f"[{tag}] {json.dumps(payload, ensure_ascii=True)}", flush=True)
+def _fmt_value(value: Any) -> str:
+    if value is None:
+        return "null"
+    text = str(value).replace("\n", " ").replace("\r", " ").strip()
+    return text.replace(" ", "_")
+
+
+def _log_block(tag: str, **fields: Any) -> None:
+    body = " ".join(f"{k}={_fmt_value(v)}" for k, v in fields.items())
+    print(f"[{tag}] {body}", flush=True)
 
 
 def _normalize_observation(step_result: Any) -> Any:
@@ -134,13 +141,16 @@ def choose_action(client: OpenAI, observation: Any) -> Dict[str, Any]:
             model=MODEL_NAME,
             messages=[
                 {"role": "system", "content": prompt},
-                {"role": "user", "content": json.dumps(obs_json)},
+                {"role": "user", "content": str(obs_json)},
             ],
             temperature=0.1,
             response_format={"type": "json_object"},
         )
 
         text = resp.choices[0].message.content or "{}"
+        # Keep parser dependencies minimal in case validator runtime differs.
+        import json
+
         action = json.loads(text)
     except Exception:
         return _fallback_action(observation)
@@ -176,20 +186,18 @@ async def run_episode() -> Dict[str, Any]:
 
     client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
+    _log_block(
+        "START",
+        task=TASK,
+        model=MODEL_NAME,
+        api_base_url=API_BASE_URL,
+        env_mode=env_source.get("mode"),
+    )
+
     await _maybe_await(env.connect())
     total_reward = 0.0
     step_count = 0
     try:
-        _log(
-            "START",
-            {
-                "task": TASK,
-                "api_base_url": API_BASE_URL,
-                "model_name": MODEL_NAME,
-                "env": env_source,
-            },
-        )
-
         reset_result = await _maybe_await(env.reset(task=TASK))
         observation = _normalize_observation(reset_result)
 
@@ -203,25 +211,23 @@ async def run_episode() -> Dict[str, Any]:
             info = _info(step_result)
             total_reward += reward
 
-            _log(
+            _log_block(
                 "STEP",
-                {
-                    "step": step_count,
-                    "action": action,
-                    "reward": reward,
-                    "total_reward": total_reward,
-                    "done": done,
-                },
+                task=TASK,
+                step=step_count,
+                action=action.get("action"),
+                reward=round(reward, 4),
+                total_reward=round(total_reward, 4),
+                done=done,
             )
 
             if done:
-                _log(
+                _log_block(
                     "END",
-                    {
-                        "steps": step_count,
-                        "total_reward": total_reward,
-                        "info": info,
-                    },
+                    task=TASK,
+                    score=round(total_reward, 4),
+                    steps=step_count,
+                    done=True,
                 )
                 return {
                     "steps": step_count,
@@ -232,14 +238,13 @@ async def run_episode() -> Dict[str, Any]:
 
             observation = _normalize_observation(step_result)
 
-        _log(
+        _log_block(
             "END",
-            {
-                "steps": step_count,
-                "total_reward": total_reward,
-                "done": False,
-                "reason": "max_steps_reached",
-            },
+            task=TASK,
+            score=round(total_reward, 4),
+            steps=step_count,
+            done=False,
+            reason="max_steps_reached",
         )
         return {
             "steps": step_count,
@@ -257,13 +262,12 @@ if __name__ == "__main__":
     try:
         asyncio.run(run_episode())
     except Exception as exc:
-        _log(
+        _log_block(
             "END",
-            {
-                "steps": 0,
-                "total_reward": 0.0,
-                "done": False,
-                "reason": "runtime_error",
-                "error": str(exc),
-            },
+            task=TASK,
+            score=0.0,
+            steps=0,
+            done=False,
+            reason="runtime_error",
+            error=str(exc),
         )
