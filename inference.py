@@ -21,16 +21,20 @@ TASK = os.getenv("TASK", "easy")
 MAX_STEPS = int(os.getenv("MAX_STEPS", "10"))
 
 
-def _fmt_value(value: Any) -> str:
-    if value is None:
-        return "null"
-    text = str(value).replace("\n", " ").replace("\r", " ").strip()
-    return text.replace(" ", "_")
+def _num(value: float) -> str:
+    return f"{value:.4f}"
 
 
-def _log_block(tag: str, **fields: Any) -> None:
-    body = " ".join(f"{k}={_fmt_value(v)}" for k, v in fields.items())
-    print(f"[{tag}] {body}", flush=True)
+def _log_start(task: str) -> None:
+    print(f"[START] task={task}", flush=True)
+
+
+def _log_step(step: int, reward: float) -> None:
+    print(f"[STEP] step={step} reward={_num(reward)}", flush=True)
+
+
+def _log_end(task: str, score: float, steps: int) -> None:
+    print(f"[END] task={task} score={_num(score)} steps={steps}", flush=True)
 
 
 def _normalize_observation(step_result: Any) -> Any:
@@ -176,6 +180,9 @@ def choose_action(client: OpenAI, observation: Any) -> Dict[str, Any]:
 
 
 async def run_episode() -> Dict[str, Any]:
+    # Emit START before any network/container operations so parser always sees it.
+    _log_start(TASK)
+
     env = None
     if LOCAL_IMAGE_NAME:
         env = await _maybe_await(GenericEnvClient.from_docker_image(LOCAL_IMAGE_NAME))
@@ -185,14 +192,6 @@ async def run_episode() -> Dict[str, Any]:
         env_source = {"mode": "hub_env", "repo_id": ENV_REPO_ID}
 
     client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
-
-    _log_block(
-        "START",
-        task=TASK,
-        model=MODEL_NAME,
-        api_base_url=API_BASE_URL,
-        env_mode=env_source.get("mode"),
-    )
 
     await _maybe_await(env.connect())
     total_reward = 0.0
@@ -211,24 +210,10 @@ async def run_episode() -> Dict[str, Any]:
             info = _info(step_result)
             total_reward += reward
 
-            _log_block(
-                "STEP",
-                task=TASK,
-                step=step_count,
-                action=action.get("action"),
-                reward=round(reward, 4),
-                total_reward=round(total_reward, 4),
-                done=done,
-            )
+            _log_step(step_count, reward)
 
             if done:
-                _log_block(
-                    "END",
-                    task=TASK,
-                    score=round(total_reward, 4),
-                    steps=step_count,
-                    done=True,
-                )
+                _log_end(TASK, total_reward, step_count)
                 return {
                     "steps": step_count,
                     "total_reward": total_reward,
@@ -238,14 +223,7 @@ async def run_episode() -> Dict[str, Any]:
 
             observation = _normalize_observation(step_result)
 
-        _log_block(
-            "END",
-            task=TASK,
-            score=round(total_reward, 4),
-            steps=step_count,
-            done=False,
-            reason="max_steps_reached",
-        )
+        _log_end(TASK, total_reward, step_count)
         return {
             "steps": step_count,
             "total_reward": total_reward,
@@ -262,12 +240,5 @@ if __name__ == "__main__":
     try:
         asyncio.run(run_episode())
     except Exception as exc:
-        _log_block(
-            "END",
-            task=TASK,
-            score=0.0,
-            steps=0,
-            done=False,
-            reason="runtime_error",
-            error=str(exc),
-        )
+        # If anything fails early, still emit parseable END block.
+        _log_end(TASK, 0.0, 0)
